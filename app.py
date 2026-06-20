@@ -87,7 +87,7 @@ if data is None:
 meals = data.get("meals", [])
 shopping = data.get("shopping_list", [])
 
-tab1, tab2, tab3 = st.tabs(["📅 レシピ", "📊 栄養", "🛒 買い物"])
+tab1, tab2, tab3, tab4 = st.tabs(["📅 レシピ", "📊 栄養", "🛒 買い物", "📋 通知履歴"])
 
 # ── タブ1: レシピカード（縦並び・モバイル対応）
 with tab1:
@@ -212,3 +212,84 @@ with tab3:
     st.divider()
     st.subheader("📋 コピー用テキスト")
     st.code(list_text, language=None)
+
+# ── タブ4: 通知履歴
+HISTORY_FILE = "data/alerts_history.json"
+_IMPACT_ORDER_HIST = {"高": 0, "中": 1, "低": 2}
+_BADGE_COLORS_HIST = {"高": "#D32F2F", "中": "#F57C00", "低": "#757575"}
+
+with tab4:
+    st.subheader("📋 厚労省・中医協 通知履歴")
+
+    if not os.path.exists(HISTORY_FILE):
+        st.info("まだ通知履歴がありません。GitHub Actions を実行してください。")
+        st.stop()
+
+    with open(HISTORY_FILE, "r", encoding="utf-8") as _f:
+        _history = json.load(_f)
+
+    _all_articles = []
+    for _batch in _history:
+        for _article in _batch.get("articles", []):
+            _all_articles.append({**_article, "_run_date": _batch["run_date"]})
+
+    if not _all_articles:
+        st.info("履歴データが空です。")
+        st.stop()
+
+    col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+    with col_f1:
+        date_from = st.date_input("開始日", value=None, key="hist_date_from")
+    with col_f2:
+        date_to = st.date_input("終了日", value=None, key="hist_date_to")
+    with col_f3:
+        source_filter = st.multiselect("情報源", ["厚労省", "中医協"], default=["厚労省", "中医協"])
+    with col_f4:
+        impact_filter = st.multiselect("重要度", ["高", "中", "低"], default=["高", "中", "低"])
+    keyword_search = st.text_input("🔍 キーワード検索", placeholder="例: 診療報酬")
+
+    _filtered = _all_articles
+    if date_from:
+        _filtered = [a for a in _filtered if a["_run_date"] >= str(date_from)]
+    if date_to:
+        _filtered = [a for a in _filtered if a["_run_date"] <= str(date_to)]
+    if source_filter:
+        _filtered = [a for a in _filtered if a.get("source") in source_filter]
+    if impact_filter:
+        _filtered = [a for a in _filtered if a.get("impact_level") in impact_filter]
+    if keyword_search.strip():
+        _kw = keyword_search.strip().lower()
+        _filtered = [
+            a for a in _filtered
+            if _kw in a.get("title", "").lower()
+            or _kw in a.get("summary", "").lower()
+            or _kw in " ".join(a.get("matched_keywords", [])).lower()
+        ]
+
+    _filtered.sort(key=lambda a: _IMPACT_ORDER_HIST.get(a.get("impact_level", "低"), 2))
+    _filtered.sort(key=lambda a: a["_run_date"], reverse=True)
+
+    st.caption(f"{len(_filtered)} 件表示中（全 {len(_all_articles)} 件）")
+
+    for _art in _filtered:
+        _impact = _art.get("impact_level", "低")
+        _color = _BADGE_COLORS_HIST.get(_impact, "#757575")
+        _pri_icon = "⚠️ " if _art.get("priority") else ""
+        _label = (
+            f"{_pri_icon}[{_impact}] {_art.get('source','')} — "
+            f"{_art['_run_date']} — {_art.get('title','')[:50]}"
+        )
+        with st.expander(_label):
+            st.markdown(
+                f'<span style="background:{_color};color:white;padding:2px 8px;'
+                f'border-radius:4px;font-size:12px;">{_impact}</span> '
+                f'<span style="font-size:12px;color:#666;">{_art.get("source","")}</span>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(f"**{_art.get('title','')}**")
+            st.markdown(f"[記事を開く]({_art.get('url','')})")
+            st.write(_art.get("summary", ""))
+            if _art.get("client_point"):
+                st.info(f"経営者へのポイント: {_art['client_point']}")
+            if _art.get("matched_keywords"):
+                st.caption("マッチキーワード: " + ", ".join(_art["matched_keywords"]))

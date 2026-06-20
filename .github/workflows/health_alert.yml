@@ -1,0 +1,42 @@
+name: MHLW Health Alert
+
+on:
+  schedule:
+    - cron: "0 22 * * *"   # 22:00 UTC = 07:00 JST
+  workflow_dispatch:         # 手動テスト用
+
+permissions:
+  contents: write            # seen_urls.json / alerts_history.json のコミットに必要
+
+concurrency:
+  group: health-alert
+  cancel-in-progress: false  # 二重実行防止（先行ジョブを優先）
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run health alert
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          ALERT_TO_EMAIL: ${{ secrets.ALERT_TO_EMAIL }}
+        run: python scripts/send_health_alert.py
+
+      - name: Commit updated data files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/seen_urls.json data/alerts_history.json
+          git diff --cached --quiet || git commit -m "chore: update alert data $(date +%Y-%m-%d) [skip ci]"
+          git push
