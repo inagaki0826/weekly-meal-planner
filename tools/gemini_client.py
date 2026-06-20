@@ -11,7 +11,7 @@ def generate(prompt: str, json_mode: bool = False) -> str:
         response_mime_type="application/json" if json_mode else "text/plain"
     )
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=prompt,
         config=config
     )
