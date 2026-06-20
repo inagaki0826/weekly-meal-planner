@@ -42,15 +42,20 @@ with st.sidebar:
 
 # ── タイトル
 st.markdown("""
-<div style="border-bottom: 3px solid #FF6B6B; padding-bottom: 12px; margin-bottom: 20px;">
-    <h2 style="margin: 0; font-size: 1.4rem; font-weight: 800; color: #1a1a1a;">
-        🍳 週間夕飯プランナー
-    </h2>
-    <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: #999;">
-        月〜金の夕飯をAIが自動プランニング・週1回の買い物で完結
-    </p>
-</div>
+<style>
+.app-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 0.25rem;
+}
+@media (max-width: 480px) {
+    .app-title { font-size: 1.6rem; }
+}
+</style>
+<p class="app-title">🍳 週間夕飯プランナー</p>
 """, unsafe_allow_html=True)
+st.caption("月〜金の夕飯をAIが自動プランニング。週1回の買い物で全部作れます。")
 
 # ── ウェルカム画面（未生成時のみ）
 main_gen_btn = False
