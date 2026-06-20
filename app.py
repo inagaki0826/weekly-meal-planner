@@ -36,7 +36,6 @@ if generate_btn:
         try:
             data = generate_plan()
             save_data(data)
-            st.rerun()
         except Exception as e:
             st.error(f"生成に失敗しました: {e}")
 
@@ -83,15 +82,19 @@ with tab1:
                     st.write(f"{j}. {step}")
 
             if st.button("🔄 差し替え", key=f"replace_{i}", use_container_width=True):
+                _error = None
                 with st.spinner(f"{meal['day']}を差し替え中..."):
                     try:
                         new_meal, new_shopping = replace_meal(meal["day"], meals)
                         data["meals"][i] = new_meal
                         data["shopping_list"] = new_shopping
                         save_data(data)
-                        st.rerun()
                     except Exception as e:
-                        st.error(f"差し替えに失敗しました: {e}")
+                        _error = e
+                if _error:
+                    st.error(f"差し替えに失敗しました: {_error}")
+                else:
+                    st.rerun()
 
 # ── タブ2: 栄養グラフ ───────────────────────────────────────────
 with tab2:
