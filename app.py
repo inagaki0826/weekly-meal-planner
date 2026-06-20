@@ -81,7 +81,7 @@ with tab1:
                 for j, step in enumerate(meal.get("steps", []), 1):
                     st.write(f"{j}. {step}")
 
-            if st.button("🔄 差し替え", key=f"replace_{i}", use_container_width=True):
+            if st.button("🔄 差し替え", key=f"replace_{i}"):
                 _error = None
                 with st.spinner(f"{meal['day']}を差し替え中..."):
                     try:
