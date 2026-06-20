@@ -41,8 +41,16 @@ with st.sidebar:
         st.caption("気に入らない日は各レシピの「差し替え」を押してください")
 
 # ── タイトル
-st.title("🍳 週間夕飯プランナー")
-st.caption("月〜金の夕飯をAIが自動プランニング。週1回の買い物で全部作れます。")
+st.markdown("""
+<div style="border-bottom: 3px solid #FF6B6B; padding-bottom: 12px; margin-bottom: 20px;">
+    <h2 style="margin: 0; font-size: 1.4rem; font-weight: 800; color: #1a1a1a;">
+        🍳 週間夕飯プランナー
+    </h2>
+    <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: #999;">
+        月〜金の夕飯をAIが自動プランニング・週1回の買い物で完結
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 # ── ウェルカム画面（未生成時のみ）
 main_gen_btn = False
