@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import os
 import streamlit as st
@@ -5,7 +6,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from tools.meal_planner import generate_plan, replace_meal
 
-st.set_page_config(page_title="週間夕飯プランナー", page_icon="🍳", layout="wide")
+st.set_page_config(page_title="週間夕飯プランナー", page_icon="🍳", layout="centered")
 
 DATA_FILE = "meal_data.json"
 
@@ -19,114 +20,145 @@ def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-# ── サイドバー ──────────────────────────────────────────────────
+# ── データ読み込み（苦手食材の初期値に使用）
+data = load_data()
+saved_disliked = (data or {}).get("disliked", "柑橘系, グリーンピース, 激辛系")
+
+# ── サイドバー
 with st.sidebar:
     st.header("設定")
-    st.info("苦手な食材：柑橘系・グリーンピース・激辛系", icon="🚫")
-    generate_btn = st.button("🔄 今週のレシピを生成する", use_container_width=True, type="primary")
-
-    if load_data() is not None:
+    disliked_input = st.text_input(
+        "🚫 苦手な食材（カンマ区切り）",
+        value=saved_disliked,
+        placeholder="例: 柑橘系, えび, 辛いもの"
+    )
+    sidebar_gen_btn = st.button("🔄 今週のレシピを生成する", use_container_width=True, type="primary")
+    if data is not None:
         st.divider()
         st.success("生成済み", icon="✅")
-        st.caption("気に入らない日は各レシピの「差し替え」ボタンを押してください")
+        if data.get("generated_at"):
+            st.caption(f"生成日: {data['generated_at']}")
+        st.caption("気に入らない日は各レシピの「差し替え」を押してください")
 
-# ── 生成処理 ───────────────────────────────────────────────────
-if generate_btn:
+# ── タイトル
+st.title("🍳 週間夕飯プランナー")
+st.caption("月〜金の夕飯をAIが自動プランニング。週1回の買い物で全部作れます。")
+
+# ── ウェルカム画面（未生成時のみ）
+main_gen_btn = False
+if data is None:
+    st.info("👈 スマホの方は左上の ≡ をタップ、またはこちらのボタンから生成できます", icon="📱")
+    main_gen_btn = st.button("▶ まずはレシピを生成する", type="primary", use_container_width=True)
+
+# ── 生成処理
+should_generate = sidebar_gen_btn or main_gen_btn
+if should_generate:
+    _gen_error = None
     with st.spinner("AIが5日分のレシピを考えています...（30秒ほどかかります）"):
         try:
-            data = generate_plan()
-            save_data(data)
+            new_data = generate_plan(disliked_input)
+            new_data["disliked"] = disliked_input
+            new_data["generated_at"] = datetime.now().strftime("%Y/%m/%d")
+            save_data(new_data)
         except Exception as e:
-            st.error(f"生成に失敗しました: {e}")
+            _gen_error = e
+    if _gen_error:
+        st.error(f"生成に失敗しました: {_gen_error}")
+    else:
+        st.rerun()
 
-# ── 未生成時のガイド ───────────────────────────────────────────
-data = load_data()
 if data is None:
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown("### 使い方")
-        st.markdown("""
-1. 左のサイドバーの **「今週のレシピを生成する」** を押す
-2. AIが月〜金の夕飯を5日分考えます
-3. **レシピ** を確認して、気に入らない日は差し替え
-4. **買い物リスト** をコピーして週1回の買い物へ
-        """)
     st.stop()
 
-# ── 結果表示 ───────────────────────────────────────────────────
+# ── 結果表示
 meals = data.get("meals", [])
 shopping = data.get("shopping_list", [])
 
-tab1, tab2, tab3 = st.tabs(["📅 今週のレシピ", "📊 栄養バランス", "🛒 買い物リスト"])
+tab1, tab2, tab3 = st.tabs(["📅 レシピ", "📊 栄養", "🛒 買い物"])
 
-# ── タブ1: レシピカード ─────────────────────────────────────────
+# ── タブ1: レシピカード（縦並び・モバイル対応）
 with tab1:
-    cols = st.columns(5)
+    if data.get("generated_at"):
+        st.caption(f"生成日: {data['generated_at']}")
+
     for i, meal in enumerate(meals):
-        with cols[i]:
-            tool_icon = "🍳" if meal.get("tool") == "フライパン" else "🥘"
-            st.markdown(f"### {meal['day']}")
-            st.markdown(f"**{meal['name']}**")
-            st.caption(f"{tool_icon} {meal.get('tool', '')} ｜ ⏱ {meal.get('time', '?')}分")
+        n = meal.get("nutrition", {})
+        tool_icon = "🍳" if meal.get("tool") == "フライパン" else "🥘"
 
-            n = meal.get("nutrition", {})
-            st.metric("カロリー(2人分)", f"{n.get('calories', '?')} kcal")
+        with st.container(border=True):
+            header_col, btn_col = st.columns([5, 1])
+            with header_col:
+                st.markdown(f"**{meal['day']}　{meal['name']}**")
+                st.caption(
+                    f"{tool_icon} {meal.get('tool', '')} ｜ "
+                    f"⏱ {meal.get('time', '?')}分 ｜ "
+                    f"🔥 {n.get('calories', '?')} kcal（2人分）"
+                )
+            with btn_col:
+                replace_clicked = st.button("🔄 差し替え", key=f"replace_{i}", type="secondary")
 
-            with st.expander("🥦 材料"):
-                for ing in meal.get("ingredients", []):
-                    st.write(f"• {ing['name']}　{ing['amount']}")
+            exp1, exp2 = st.columns(2)
+            with exp1:
+                with st.expander("🥦 材料"):
+                    for ing in meal.get("ingredients", []):
+                        st.write(f"• {ing['name']}　{ing['amount']}")
+            with exp2:
+                with st.expander("📝 作り方"):
+                    for j, step in enumerate(meal.get("steps", []), 1):
+                        st.write(f"{j}. {step}")
 
-            with st.expander("📝 作り方"):
-                for j, step in enumerate(meal.get("steps", []), 1):
-                    st.write(f"{j}. {step}")
+        if replace_clicked:
+            _rep_error = None
+            current_disliked = data.get("disliked", saved_disliked)
+            with st.spinner(f"{meal['day']}を差し替え中..."):
+                try:
+                    new_meal, new_shopping = replace_meal(meal["day"], meals, current_disliked)
+                    data["meals"][i] = new_meal
+                    data["shopping_list"] = new_shopping
+                    save_data(data)
+                except Exception as e:
+                    _rep_error = e
+            if _rep_error:
+                st.error(f"差し替えに失敗しました: {_rep_error}")
+            else:
+                st.rerun()
 
-            if st.button("🔄 差し替え", key=f"replace_{i}"):
-                _error = None
-                with st.spinner(f"{meal['day']}を差し替え中..."):
-                    try:
-                        new_meal, new_shopping = replace_meal(meal["day"], meals)
-                        data["meals"][i] = new_meal
-                        data["shopping_list"] = new_shopping
-                        save_data(data)
-                    except Exception as e:
-                        _error = e
-                if _error:
-                    st.error(f"差し替えに失敗しました: {_error}")
-                else:
-                    st.rerun()
-
-# ── タブ2: 栄養グラフ ───────────────────────────────────────────
+# ── タブ2: 栄養グラフ
 with tab2:
     if not meals:
         st.warning("レシピを生成してください")
     else:
-        days       = [m["day"]                          for m in meals]
+        days       = [m["day"]                            for m in meals]
         calories   = [m["nutrition"].get("calories", 0)   for m in meals]
         protein    = [m["nutrition"].get("protein", 0)    for m in meals]
         carbs      = [m["nutrition"].get("carbs", 0)      for m in meals]
         fat        = [m["nutrition"].get("fat", 0)        for m in meals]
         vegetables = [m["nutrition"].get("vegetables", 0) for m in meals]
 
-        col1, col2 = st.columns(2)
+        # 週平均サマリー
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("平均カロリー(2人分)", f"{int(sum(calories)/len(calories))} kcal")
+        c2.metric("平均タンパク質",     f"{int(sum(protein)/len(protein))} g")
+        c3.metric("平均炭水化物",       f"{int(sum(carbs)/len(carbs))} g")
+        c4.metric("平均野菜摂取",       f"{int(sum(vegetables)/len(vegetables))} g")
 
+        st.divider()
+
+        col1, col2 = st.columns(2)
         with col1:
-            st.subheader("1日あたりのカロリー（2人分）")
+            st.subheader("日別カロリー（2人分）")
             fig_cal = px.bar(
-                x=days, y=calories,
-                color=calories,
+                x=days, y=calories, color=calories,
                 color_continuous_scale="oranges",
                 labels={"x": "曜日", "y": "kcal", "color": "kcal"}
             )
-            fig_cal.add_hline(
-                y=1400, line_dash="dot", line_color="red",
-                annotation_text="目安 700kcal×2人"
-            )
+            fig_cal.add_hline(y=1400, line_dash="dot", line_color="red",
+                              annotation_text="目安 700kcal×2人")
             fig_cal.update_layout(coloraxis_showscale=False)
             st.plotly_chart(fig_cal, use_container_width=True)
 
         with col2:
-            st.subheader("週平均のPFCバランス（カロリー換算）")
+            st.subheader("週平均PFCバランス")
             avg_p = sum(protein) / len(protein)
             avg_c = sum(carbs)   / len(carbs)
             avg_f = sum(fat)     / len(fat)
@@ -139,33 +171,19 @@ with tab2:
             fig_pfc.update_traces(textinfo="percent+label")
             st.plotly_chart(fig_pfc, use_container_width=True)
 
-        st.subheader("日別 栄養素（g）")
+        st.subheader("日別 栄養素内訳（g）")
         fig_stack = go.Figure(data=[
-            go.Bar(name="タンパク質", x=days, y=protein,   marker_color="#FF6B6B"),
-            go.Bar(name="炭水化物",   x=days, y=carbs,     marker_color="#4ECDC4"),
-            go.Bar(name="脂質",       x=days, y=fat,       marker_color="#FFE66D"),
+            go.Bar(name="タンパク質", x=days, y=protein, marker_color="#FF6B6B"),
+            go.Bar(name="炭水化物",   x=days, y=carbs,   marker_color="#4ECDC4"),
+            go.Bar(name="脂質",       x=days, y=fat,     marker_color="#FFE66D"),
         ])
         fig_stack.update_layout(barmode="group", yaxis_title="g", legend_title="栄養素")
         st.plotly_chart(fig_stack, use_container_width=True)
 
-        st.subheader("日別 野菜摂取量（g）")
-        fig_veg = px.bar(
-            x=days, y=vegetables,
-            color=vegetables,
-            color_continuous_scale="greens",
-            labels={"x": "曜日", "y": "g", "color": "g"}
-        )
-        fig_veg.add_hline(
-            y=350, line_dash="dot", line_color="green",
-            annotation_text="1日の目標 350g"
-        )
-        fig_veg.update_layout(coloraxis_showscale=False)
-        st.plotly_chart(fig_veg, use_container_width=True)
-
-# ── タブ3: 買い物リスト ─────────────────────────────────────────
+# ── タブ3: 買い物リスト
 with tab3:
     st.subheader("今週の買い物リスト")
-    st.caption("チェックボックスで購入済みを管理できます（チェック状態は端末ごとに独立しています）")
+    st.caption("⚠️ チェック状態はブラウザを閉じると消えます。共有にはコピー用テキストをご利用ください。")
 
     list_text = "【今週の買い物リスト】\n"
     shop_cols = st.columns(2)
@@ -181,4 +199,5 @@ with tab3:
             list_text += f"  □ {item['name']}　{item['amount']}\n"
 
     st.divider()
-    st.text_area("コピー用テキスト", value=list_text, height=250)
+    st.subheader("📋 コピー用テキスト")
+    st.code(list_text, language=None)
