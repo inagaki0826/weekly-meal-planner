@@ -86,16 +86,12 @@ with tab1:
         tool_icon = "🍳" if meal.get("tool") == "フライパン" else "🥘"
 
         with st.container(border=True):
-            header_col, btn_col = st.columns([5, 1])
-            with header_col:
-                st.markdown(f"**{meal['day']}　{meal['name']}**")
-                st.caption(
-                    f"{tool_icon} {meal.get('tool', '')} ｜ "
-                    f"⏱ {meal.get('time', '?')}分 ｜ "
-                    f"🔥 {n.get('calories', '?')} kcal（2人分）"
-                )
-            with btn_col:
-                replace_clicked = st.button("🔄 差し替え", key=f"replace_{i}", type="secondary")
+            st.markdown(f"**{meal['day']}　{meal['name']}**")
+            st.caption(
+                f"{tool_icon} {meal.get('tool', '')} ｜ "
+                f"⏱ {meal.get('time', '?')}分 ｜ "
+                f"🔥 {n.get('calories', '?')} kcal（2人分）"
+            )
 
             exp1, exp2 = st.columns(2)
             with exp1:
@@ -106,6 +102,8 @@ with tab1:
                 with st.expander("📝 作り方"):
                     for j, step in enumerate(meal.get("steps", []), 1):
                         st.write(f"{j}. {step}")
+
+            replace_clicked = st.button("🔄 差し替え", key=f"replace_{i}", type="secondary")
 
         if replace_clicked:
             _rep_error = None
